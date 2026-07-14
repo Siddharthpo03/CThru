@@ -1,51 +1,73 @@
-import { Upload, SearchCheck, Sparkles } from "lucide-react";
+import { SearchCheck, Sparkles, Upload } from "lucide-react";
 
 const steps = [
   {
+    number: "01",
     icon: Upload,
-    title: "1. Submit Code",
-    description: "Paste your code or upload a source file in seconds.",
-  },
-  {
-    icon: SearchCheck,
-    title: "2. Analyze",
-    description: "Static analysis detects bugs, code smells, and style issues.",
-  },
-  {
-    icon: Sparkles,
-    title: "3. Improve",
+    title: "Submit your code",
     description:
-      "AI generates explanations, optimizations, and refactoring suggestions.",
+      "Paste source code directly into the editor or upload a supported source file.",
+  },
+  {
+    number: "02",
+    icon: SearchCheck,
+    title: "CThru analyzes it",
+    description:
+      "Static analysis and AI inspect bugs, complexity, security, and code quality.",
+  },
+  {
+    number: "03",
+    icon: Sparkles,
+    title: "Review and improve",
+    description:
+      "Explore detailed findings, understand each issue, and apply suggested fixes.",
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section id="how" className="bg-zinc-900/40 py-24">
+    <section id="how" className="py-24">
       <div className="mx-auto max-w-7xl px-6">
-        <h2 className="text-center text-4xl font-bold">How CThru Works</h2>
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+            Workflow
+          </p>
 
-        <p className="mx-auto mt-4 max-w-xl text-center text-zinc-400">
-          Three simple steps to make your code cleaner, safer, and easier to
-          maintain.
-        </p>
+          <h2 className="mt-4 text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
+            From code to clarity in three steps
+          </h2>
 
-        <div className="mt-16 grid gap-8 md:grid-cols-3">
+          <p className="mt-5 text-lg text-zinc-600 dark:text-zinc-400">
+            Submit your code and receive structured, actionable feedback.
+          </p>
+        </div>
+
+        <div className="mt-16 grid gap-6 lg:grid-cols-3">
           {steps.map((step) => {
             const Icon = step.icon;
 
             return (
               <div
-                key={step.title}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 p-8 text-center transition hover:border-indigo-500"
+                key={step.number}
+                className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
               >
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600/20">
-                  <Icon size={32} className="text-indigo-400" />
+                <span className="absolute right-6 top-4 text-7xl font-bold text-zinc-100 dark:text-zinc-800">
+                  {step.number}
+                </span>
+
+                <div className="relative">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">
+                    <Icon size={26} />
+                  </div>
+
+                  <h3 className="mt-7 text-xl font-semibold text-zinc-950 dark:text-white">
+                    {step.title}
+                  </h3>
+
+                  <p className="mt-3 leading-7 text-zinc-600 dark:text-zinc-400">
+                    {step.description}
+                  </p>
                 </div>
-
-                <h3 className="mb-3 text-2xl font-semibold">{step.title}</h3>
-
-                <p className="text-zinc-400">{step.description}</p>
               </div>
             );
           })}
