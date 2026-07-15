@@ -6,7 +6,6 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,11 +19,9 @@ export function AuthProvider({ children }) {
 
       try {
         const data = await apiRequest("/auth/profile");
-
         setUser(data.user);
       } catch {
         localStorage.removeItem("cthru-token");
-
         setUser(null);
       } finally {
         setLoading(false);
@@ -45,7 +42,6 @@ export function AuthProvider({ children }) {
     });
 
     localStorage.setItem("cthru-token", data.token);
-
     setUser(data.user);
 
     return data;
@@ -61,15 +57,31 @@ export function AuthProvider({ children }) {
     });
 
     localStorage.setItem("cthru-token", data.token);
-
     setUser(data.user);
 
     return data;
   };
 
+  const forgotPassword = async (email) => {
+    return await apiRequest("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+      }),
+    });
+  };
+
+  const resetPassword = async (token, password) => {
+    return await apiRequest(`/auth/reset-password/${token}`, {
+      method: "POST",
+      body: JSON.stringify({
+        password,
+      }),
+    });
+  };
+
   const logout = () => {
     localStorage.removeItem("cthru-token");
-
     setUser(null);
   };
 
@@ -82,6 +94,8 @@ export function AuthProvider({ children }) {
         register,
         login,
         logout,
+        forgotPassword,
+        resetPassword,
       }}
     >
       {children}

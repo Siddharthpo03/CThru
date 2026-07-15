@@ -1,37 +1,41 @@
 import { useState } from "react";
-
 import { ArrowLeft, LoaderCircle, Mail, Send } from "lucide-react";
-
 import { Link } from "react-router-dom";
-
 import toast from "react-hot-toast";
 
 import AuthLayout from "../components/auth/AuthLayout";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function ForgotPassword() {
+  const { forgotPassword } = useAuth();
+
   const [email, setEmail] = useState("");
-
   const [loading, setLoading] = useState(false);
-
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
       toast.error("Enter your email address.");
       return;
     }
 
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
+      const data = await forgotPassword(trimmedEmail);
 
       setSent(true);
 
-      toast.success("Reset instructions sent.");
-    }, 1200);
+      toast.success(data.message);
+    } catch (error) {
+      toast.error(error.message || "Unable to send reset email.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,8 +43,8 @@ export default function ForgotPassword() {
       title={sent ? "Check your inbox" : "Forgot your password?"}
       description={
         sent
-          ? "We've sent password reset instructions to your email."
-          : "Enter your email and we'll send you instructions to reset your password."
+          ? "If an account exists with this email, we've sent password reset instructions."
+          : "Enter your email address and we'll send you a password reset link."
       }
     >
       {sent ? (
@@ -51,17 +55,25 @@ export default function ForgotPassword() {
             </div>
 
             <p className="mt-5 font-medium text-zinc-900 dark:text-white">
-              Email sent to
+              If an account exists for
             </p>
 
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 break-all text-sm text-zinc-500 dark:text-zinc-400">
               {email}
+            </p>
+
+            <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+              We've sent password reset instructions. Please check your inbox
+              and spam folder.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => setSent(false)}
+            onClick={() => {
+              setSent(false);
+              setEmail("");
+            }}
             className="mt-5 w-full text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
           >
             Try another email
@@ -89,6 +101,7 @@ export default function ForgotPassword() {
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
+              required
               className="h-12 w-full rounded-xl border border-zinc-200 bg-white pl-11 pr-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
             />
           </div>
@@ -96,7 +109,7 @@ export default function ForgotPassword() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? (
               <>

@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
+import { runStaticAnalysis } from "./staticAnalysis.service.js";
+
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
@@ -12,9 +14,10 @@ const MIN_LINE_RATIO = 0.75;
 const MIN_CHARACTER_RATIO = 0.7;
 const MIN_SYMBOL_RATIO = 0.85;
 
-const MAX_PATCH_ORIGINAL_LINES = 80;
-const MAX_PATCH_SHRINK_RATIO = 0.45;
+const MAX_PATCH_ORIGINAL_LINES = 100;
 const MAX_PATCH_GROWTH_RATIO = 4;
+
+const LOCAL_FINDING_PADDING = 12;
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
@@ -117,9 +120,13 @@ function extractJavaScriptSymbols(code) {
 
   const patterns = [
     /\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,
+
     /\bclass\s+([A-Za-z_$][\w$]*)\b/g,
+
     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g,
+
     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*=>/g,
+
     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?function\b/g,
   ];
 
@@ -141,8 +148,11 @@ function extractGenericSymbols(code) {
 
   const patterns = [
     /\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,
+
     /\bclass\s+([A-Za-z_$][\w$]*)\b/g,
+
     /\bdef\s+([A-Za-z_][\w]*)\s*\(/g,
+
     /\b(?:public|private|protected|static|final|async|export|\s)+\s*[\w<>\[\],.?]+\s+([A-Za-z_][\w]*)\s*\([^;{}]*\)\s*\{/g,
   ];
 
@@ -189,8 +199,11 @@ function calculateSymbolPreservation(originalCode, correctedCode, language) {
 
   return {
     ratio: preservedSymbols.length / originalSymbols.length,
+
     originalSymbols,
+
     preservedSymbols,
+
     missingSymbols,
   };
 }
@@ -289,8 +302,11 @@ function getBraceBalance(code) {
 
   return {
     valid: curly === 0 && round === 0 && square === 0 && !blockComment,
+
     curly,
+
     round,
+
     square,
   };
 }
@@ -302,6 +318,7 @@ function validateSourceIntegrity({
   checkGlobalSize = true,
 }) {
   const original = normalizeNewlines(originalCode);
+
   const candidate = normalizeNewlines(candidateCode);
 
   if (!candidate.trim()) {
@@ -312,9 +329,11 @@ function validateSourceIntegrity({
   }
 
   const originalLines = countLines(original);
+
   const candidateLines = countLines(candidate);
 
   const originalCharacters = countNonWhitespaceCharacters(original);
+
   const candidateCharacters = countNonWhitespaceCharacters(candidate);
 
   const lineRatio = originalLines === 0 ? 1 : candidateLines / originalLines;
@@ -325,8 +344,13 @@ function validateSourceIntegrity({
   if (checkGlobalSize && lineRatio < MIN_LINE_RATIO) {
     return {
       valid: false,
-      reason: `Line integrity failed: ${candidateLines}/${originalLines} lines preserved.`,
+
+      reason:
+        `Line integrity failed: ` +
+        `${candidateLines}/${originalLines} lines preserved.`,
+
       lineRatio,
+
       characterRatio,
     };
   }
@@ -334,8 +358,14 @@ function validateSourceIntegrity({
   if (checkGlobalSize && characterRatio < MIN_CHARACTER_RATIO) {
     return {
       valid: false,
-      reason: `Character integrity failed: ${candidateCharacters}/${originalCharacters} non-whitespace characters preserved.`,
+
+      reason:
+        `Character integrity failed: ` +
+        `${candidateCharacters}/${originalCharacters} ` +
+        `non-whitespace characters preserved.`,
+
       lineRatio,
+
       characterRatio,
     };
   }
@@ -345,9 +375,17 @@ function validateSourceIntegrity({
   if (!braceBalance.valid) {
     return {
       valid: false,
-      reason: `Structural balance failed: curly=${braceBalance.curly}, round=${braceBalance.round}, square=${braceBalance.square}.`,
+
+      reason:
+        `Structural balance failed: ` +
+        `curly=${braceBalance.curly}, ` +
+        `round=${braceBalance.round}, ` +
+        `square=${braceBalance.square}.`,
+
       lineRatio,
+
       characterRatio,
+
       braceBalance,
     };
   }
@@ -361,24 +399,37 @@ function validateSourceIntegrity({
   if (checkGlobalSize && symbolPreservation.ratio < MIN_SYMBOL_RATIO) {
     return {
       valid: false,
-      reason: `Symbol preservation failed: ${symbolPreservation.preservedSymbols.length}/${symbolPreservation.originalSymbols.length} symbols preserved.`,
+
+      reason:
+        `Symbol preservation failed: ` +
+        `${symbolPreservation.preservedSymbols.length}/` +
+        `${symbolPreservation.originalSymbols.length} ` +
+        `symbols preserved.`,
+
       lineRatio,
+
       characterRatio,
+
       symbolPreservation,
     };
   }
 
   return {
     valid: true,
+
     lineRatio,
+
     characterRatio,
+
     braceBalance,
+
     symbolPreservation,
   };
 }
 
 function normalizePatch(rawPatch, index, sourceLineCount) {
   const startLine = Number(rawPatch?.startLine);
+
   const endLine = Number(rawPatch?.endLine);
 
   if (!Number.isInteger(startLine) || !Number.isInteger(endLine)) {
@@ -404,12 +455,17 @@ function normalizePatch(rawPatch, index, sourceLineCount) {
       typeof rawPatch?.id === "string" && rawPatch.id.trim()
         ? rawPatch.id.trim()
         : `patch-${index + 1}`,
+
     findingIndex: Number.isInteger(Number(rawPatch?.findingIndex))
       ? Number(rawPatch.findingIndex)
       : null,
+
     startLine,
+
     endLine,
+
     replacementCode,
+
     reason:
       typeof rawPatch?.reason === "string"
         ? rawPatch.reason.trim()
@@ -434,6 +490,7 @@ function removeOverlappingPatches(patches) {
   });
 
   const accepted = [];
+
   const rejected = [];
 
   for (const patch of sorted) {
@@ -444,6 +501,7 @@ function removeOverlappingPatches(patches) {
     if (overlappingPatch) {
       rejected.push({
         ...patch,
+
         rejectionReason: `Overlaps with ${overlappingPatch.id}.`,
       });
 
@@ -455,6 +513,7 @@ function removeOverlappingPatches(patches) {
 
   return {
     accepted,
+
     rejected,
   };
 }
@@ -467,17 +526,11 @@ function validatePatchSize(patch) {
   if (originalLineCount > MAX_PATCH_ORIGINAL_LINES) {
     return {
       valid: false,
-      reason: `Patch targets ${originalLineCount} lines. Maximum safe patch range is ${MAX_PATCH_ORIGINAL_LINES} lines.`,
-    };
-  }
 
-  const shrinkRatio =
-    originalLineCount === 0 ? 1 : replacementLineCount / originalLineCount;
-
-  if (originalLineCount >= 8 && shrinkRatio < MAX_PATCH_SHRINK_RATIO) {
-    return {
-      valid: false,
-      reason: `Patch shrinks ${originalLineCount} lines to ${replacementLineCount} lines.`,
+      reason:
+        `Patch targets ${originalLineCount} lines. ` +
+        `Maximum safe patch range is ` +
+        `${MAX_PATCH_ORIGINAL_LINES} lines.`,
     };
   }
 
@@ -489,15 +542,44 @@ function validatePatchSize(patch) {
   if (originalLineCount >= 4 && growthRatio > MAX_PATCH_GROWTH_RATIO) {
     return {
       valid: false,
-      reason: `Patch expands ${originalLineCount} lines to ${replacementLineCount} lines.`,
+
+      reason:
+        `Patch expands ${originalLineCount} lines ` +
+        `to ${replacementLineCount} lines.`,
     };
   }
 
   return {
     valid: true,
+
     originalLineCount,
+
     replacementLineCount,
   };
+}
+
+function applyPatches(originalCode, patches) {
+  if (!patches.length) {
+    return normalizeNewlines(originalCode);
+  }
+
+  const lines = normalizeNewlines(originalCode).split("\n");
+
+  const sortedPatches = [...patches].sort(
+    (first, second) => second.startLine - first.startLine,
+  );
+
+  for (const patch of sortedPatches) {
+    lines.splice(
+      patch.startLine - 1,
+
+      patch.endLine - patch.startLine + 1,
+
+      ...patch.replacementCode.split("\n"),
+    );
+  }
+
+  return lines.join("\n");
 }
 
 function applyPatchToOriginalCoordinates(
@@ -505,25 +587,7 @@ function applyPatchToOriginalCoordinates(
   acceptedPatches,
   candidatePatch,
 ) {
-  const originalLines = normalizeNewlines(originalCode).split("\n");
-
-  const allPatches = [...acceptedPatches, candidatePatch].sort(
-    (first, second) => second.startLine - first.startLine,
-  );
-
-  const outputLines = [...originalLines];
-
-  for (const patch of allPatches) {
-    const replacementLines = patch.replacementCode.split("\n");
-
-    outputLines.splice(
-      patch.startLine - 1,
-      patch.endLine - patch.startLine + 1,
-      ...replacementLines,
-    );
-  }
-
-  return outputLines.join("\n");
+  return applyPatches(originalCode, [...acceptedPatches, candidatePatch]);
 }
 
 function normalizeFindings(findings = []) {
@@ -533,21 +597,29 @@ function normalizeFindings(findings = []) {
 
   return findings.map((finding, index) => ({
     findingIndex: index,
+
     category: String(finding?.category || "Code Quality"),
+
     severity: String(finding?.severity || "medium"),
+
     issue: String(finding?.issue || "Unspecified issue"),
+
     explanation: String(finding?.explanation || ""),
+
     suggestedFix: String(finding?.suggestedFix || ""),
+
     lineNumber:
       Number.isInteger(Number(finding?.lineNumber)) &&
       Number(finding.lineNumber) > 0
         ? Number(finding.lineNumber)
         : null,
+
     occurrenceCount:
       Number.isInteger(Number(finding?.occurrenceCount)) &&
       Number(finding.occurrenceCount) > 0
         ? Number(finding.occurrenceCount)
         : 1,
+
     lineNumbers: Array.isArray(finding?.lineNumbers)
       ? finding.lineNumbers
           .map(Number)
@@ -562,11 +634,13 @@ function applyDeterministicJavaScriptCorrections(code, findings) {
   if (!findings.length) {
     return {
       code,
+
       changes: [],
     };
   }
 
   const lines = normalizeNewlines(code).split("\n");
+
   const changes = [];
 
   const looseEqualityFinding = findings.find((finding) =>
@@ -576,6 +650,7 @@ function applyDeterministicJavaScriptCorrections(code, findings) {
   if (looseEqualityFinding) {
     const targetLines = new Set([
       looseEqualityFinding.lineNumber,
+
       ...looseEqualityFinding.lineNumbers,
     ]);
 
@@ -590,7 +665,7 @@ function applyDeterministicJavaScriptCorrections(code, findings) {
 
       const originalLine = lines[index];
 
-      let correctedLine = originalLine
+      const correctedLine = originalLine
         .replace(/(^|[^=!])==(?!=)/g, "$1===")
         .replace(/(^|[^!])!=(?!=)/g, "$1!==");
 
@@ -599,8 +674,11 @@ function applyDeterministicJavaScriptCorrections(code, findings) {
 
         changes.push({
           type: "deterministic",
+
           findingIndex: looseEqualityFinding.findingIndex,
+
           lineNumber,
+
           reason: "Replaced loose equality with strict equality.",
         });
       }
@@ -609,6 +687,7 @@ function applyDeterministicJavaScriptCorrections(code, findings) {
 
   return {
     code: lines.join("\n"),
+
     changes,
   };
 }
@@ -664,9 +743,26 @@ STRICT CORRECTION RULES:
 23. Do not claim that a negative value is allowed when the source explicitly rejects values <= 0.
 24. For refund logic, inspect the actual order status checks before proposing a correction.
 25. For sensitive data exposure, remove credential fields from returned or serialized data without deleting unrelated user fields.
-26. For complexity findings, make a local refactor only when it can be safely represented as a focused patch.
-27. Maximum recommended patch range is 40 original lines.
+26. For complexity findings, local refactoring is allowed even when a function becomes significantly shorter.
+27. Maximum recommended patch range is 60 original lines.
 28. Never intentionally reduce the overall source by more than 25%.
+29. A shorter replacement is valid when it preserves the function and fixes the linked finding.
+30. Do not pad replacement code with unnecessary lines to preserve line count.
+31. For nested-loop complexity, replace the inefficient algorithm with a valid linear or indexed implementation when possible.
+32. For repeated refund findings, reject missing orders, reject already refunded orders, and require a valid refundable status before mutating balance or stock.
+33. For administrative operations, authorization must be enforced before sensitive state mutation.
+34. For returned user data, never return or serialize password fields.
+35. Every patch must directly address its linked findingIndex.
+36. When changing a function, startLine and endLine must describe a structurally complete replacement range.
+37. Never replace only the opening half or closing half of a function.
+38. If the correction rewrites most of a function, replace the complete function from its declaration through its closing brace.
+39. replacementCode must have balanced braces independently when replacing a complete function.
+40. Before proposing a patch, verify that the final replacement joins cleanly with the line immediately before startLine and the line immediately after endLine.
+41. Do not include a closing brace belonging to an outer function, class, switch, or block.
+42. For refundOrder corrections, inspect the complete refundOrder function and preserve valid order lookup, ownership, balance, stock, and status behavior.
+43. For generateUserReport corrections, preserve the report structure while removing sensitive credential fields and optimizing repeated order scans.
+44. For executeAdminAction corrections, preserve all supported actions while enforcing administrator authorization before dispatching any sensitive action.
+45. Prefer a complete function replacement when a finding requires changing control flow in more than one branch.
 
 Return exactly this JSON shape:
 
@@ -719,7 +815,9 @@ function normalizeCorrectionResponse(rawResponse, sourceLineCount) {
       typeof parsed?.summary === "string" && parsed.summary.trim()
         ? parsed.summary.trim()
         : "CThru generated targeted source corrections.",
+
     changes,
+
     patches: normalizedPatches,
   };
 }
@@ -735,9 +833,12 @@ async function generateCorrectionWithModel({ model, prompt }) {
 
       const response = await ai.models.generateContent({
         model,
+
         contents: prompt,
+
         config: {
           temperature: 0.1,
+
           responseMimeType: "application/json",
         },
       });
@@ -755,6 +856,7 @@ async function generateCorrectionWithModel({ model, prompt }) {
       lastError = error;
 
       const status = getErrorStatus(error);
+
       const message = getErrorMessage(error);
 
       console.error(
@@ -791,11 +893,13 @@ async function generateCorrectionWithFallback(prompt) {
     try {
       const rawResponse = await generateCorrectionWithModel({
         model,
+
         prompt,
       });
 
       return {
         model,
+
         rawResponse,
       };
     } catch (error) {
@@ -810,10 +914,544 @@ async function generateCorrectionWithFallback(prompt) {
   throw lastError || new Error("All Gemini correction models failed.");
 }
 
-function applySafePatches({ originalCode, patches, language }) {
+function normalizeFindingText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getFindingWords(finding) {
+  return new Set(
+    normalizeFindingText(
+      [finding?.issue, finding?.explanation, finding?.suggestedFix]
+        .filter(Boolean)
+        .join(" "),
+    )
+      .split(" ")
+      .filter((word) => word.length > 3),
+  );
+}
+
+function calculateFindingSimilarity(first, second) {
+  const firstWords = getFindingWords(first);
+
+  const secondWords = getFindingWords(second);
+
+  if (firstWords.size === 0 || secondWords.size === 0) {
+    return 0;
+  }
+
+  let intersection = 0;
+
+  for (const word of firstWords) {
+    if (secondWords.has(word)) {
+      intersection += 1;
+    }
+  }
+
+  const union = new Set([...firstWords, ...secondWords]).size;
+
+  return union === 0 ? 0 : intersection / union;
+}
+
+function getFindingFamily(finding) {
+  const text = normalizeFindingText(
+    [finding?.issue, finding?.explanation, finding?.suggestedFix]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  const families = [
+    [
+      "authentication-bypass",
+
+      /authentication.*bypass|success.*invalid credentials|success.*without.*matched user/,
+    ],
+
+    [
+      "plaintext-password",
+
+      /plain text password|password.*without hashing|credential.*without hashing/,
+    ],
+
+    [
+      "password-exposure",
+
+      /password.*returned|password.*exposure|sensitive user data.*report|credential.*returned/,
+    ],
+
+    [
+      "admin-authorization",
+
+      /unrestricted administrative|administrative action|role modification|missing authorization.*admin|user deletion.*authorization/,
+    ],
+
+    [
+      "password-reset-authorization",
+
+      /password reset.*authorization|unrestricted password reset/,
+    ],
+
+    ["repeated-refund", /repeated refund|refund.*inflation|already refunded/],
+
+    ["refund-lookup", /refund.*lookup|missing order|order lookup.*refund/],
+
+    ["refund-status", /refund.*status|completed order.*refund/],
+
+    [
+      "negative-transfer",
+
+      /negative transfer|transfer amount.*positive|balance theft/,
+    ],
+
+    ["division-zero", /division by zero|average.*nan/],
+
+    [
+      "order-state",
+
+      /inconsistent state.*order|partial state.*order|order creation.*state/,
+    ],
+
+    ["cart-complexity", /cart.*complexity|cart total|product lookup.*cart/],
+
+    ["stock-complexity", /stock checking|stock validation.*map/],
+
+    ["max-product-complexity", /most expensive product|product search.*o n 2/],
+
+    ["loose-equality", /loose equality|strict equality/],
+
+    ["console-statement", /console statement|console output/],
+  ];
+
+  for (const [family, pattern] of families) {
+    if (pattern.test(text)) {
+      return family;
+    }
+  }
+
+  return null;
+}
+
+function findingsRepresentSameIssue(first, second) {
+  if (!first || !second || first.category !== second.category) {
+    return false;
+  }
+
+  const firstFamily = getFindingFamily(first);
+
+  const secondFamily = getFindingFamily(second);
+
+  if (firstFamily && secondFamily && firstFamily === secondFamily) {
+    return true;
+  }
+
+  return calculateFindingSimilarity(first, second) >= 0.38;
+}
+
+function runPatchStaticAnalysis(code) {
+  try {
+    const result = runStaticAnalysis({
+      code,
+
+      selectedAnalysis: ["Code Quality", "Security", "Complexity"],
+    });
+
+    return result.findings;
+  } catch (error) {
+    console.warn(
+      `Patch semantic analysis unavailable: ${getErrorMessage(error)}`,
+    );
+
+    return null;
+  }
+}
+
+function getFindingLineNumbers(finding) {
+  const lineNumbers = new Set();
+
+  const primaryLine = Number(finding?.lineNumber);
+
+  if (Number.isInteger(primaryLine) && primaryLine > 0) {
+    lineNumbers.add(primaryLine);
+  }
+
+  if (Array.isArray(finding?.lineNumbers)) {
+    for (const lineNumber of finding.lineNumbers) {
+      const numericLine = Number(lineNumber);
+
+      if (Number.isInteger(numericLine) && numericLine > 0) {
+        lineNumbers.add(numericLine);
+      }
+    }
+  }
+
+  return [...lineNumbers];
+}
+
+function isSeriousFinding(finding) {
+  return finding?.severity === "critical" || finding?.severity === "high";
+}
+
+function rangesOverlap(firstStart, firstEnd, secondStart, secondEnd) {
+  return !(firstEnd < secondStart || secondEnd < firstStart);
+}
+
+function findingExistsInCollection(targetFinding, findings) {
+  return findings.some((finding) =>
+    findingsRepresentSameIssue(targetFinding, finding),
+  );
+}
+
+function getFunctionDeclarationMatch(line) {
+  const patterns = [
+    /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/,
+
+    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/,
+
+    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*=>\s*\{/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = line.match(pattern);
+
+    if (match) {
+      return {
+        name: match[1],
+      };
+    }
+  }
+
+  return null;
+}
+
+function countCurlyBraceDelta(line) {
+  let delta = 0;
+
+  let quote = null;
+  let escaped = false;
+  let blockComment = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+
+    const nextCharacter = line[index + 1];
+
+    if (blockComment) {
+      if (character === "*" && nextCharacter === "/") {
+        blockComment = false;
+        index += 1;
+      }
+
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (character === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (character === quote) {
+        quote = null;
+      }
+
+      continue;
+    }
+
+    if (character === "/" && nextCharacter === "/") {
+      break;
+    }
+
+    if (character === "/" && nextCharacter === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      continue;
+    }
+
+    if (character === "{") {
+      delta += 1;
+    }
+
+    if (character === "}") {
+      delta -= 1;
+    }
+  }
+
+  return delta;
+}
+
+function findFunctionRanges(code) {
+  const lines = normalizeNewlines(code).split("\n");
+
+  const ranges = [];
+
+  for (let startIndex = 0; startIndex < lines.length; startIndex += 1) {
+    const declaration = getFunctionDeclarationMatch(lines[startIndex]);
+
+    if (!declaration) {
+      continue;
+    }
+
+    let balance = 0;
+
+    let foundOpeningBrace = false;
+
+    for (let endIndex = startIndex; endIndex < lines.length; endIndex += 1) {
+      const line = lines[endIndex];
+
+      const delta = countCurlyBraceDelta(line);
+
+      if (line.includes("{")) {
+        foundOpeningBrace = true;
+      }
+
+      balance += delta;
+
+      if (foundOpeningBrace && balance === 0) {
+        ranges.push({
+          name: declaration.name,
+
+          startLine: startIndex + 1,
+
+          endLine: endIndex + 1,
+        });
+
+        break;
+      }
+    }
+  }
+
+  return ranges;
+}
+
+function findContainingFunction(code, patch) {
+  const functionRanges = findFunctionRanges(code);
+
+  const exactContainingFunction = functionRanges.find(
+    (range) =>
+      patch.startLine >= range.startLine && patch.endLine <= range.endLine,
+  );
+
+  if (exactContainingFunction) {
+    return exactContainingFunction;
+  }
+
+  return functionRanges.find((range) =>
+    rangesOverlap(
+      range.startLine,
+      range.endLine,
+      patch.startLine,
+      patch.endLine,
+    ),
+  );
+}
+
+function getPatchLocalRange(code, patch) {
+  const containingFunction = findContainingFunction(code, patch);
+
+  if (containingFunction) {
+    return {
+      startLine: containingFunction.startLine,
+
+      endLine: containingFunction.endLine,
+
+      functionName: containingFunction.name,
+    };
+  }
+
+  return {
+    startLine: Math.max(1, patch.startLine - LOCAL_FINDING_PADDING),
+
+    endLine: patch.endLine + LOCAL_FINDING_PADDING,
+
+    functionName: null,
+  };
+}
+
+function isFindingInLocalRange(finding, localRange) {
+  const lineNumbers = getFindingLineNumbers(finding);
+
+  if (lineNumbers.length === 0) {
+    return false;
+  }
+
+  return lineNumbers.some(
+    (lineNumber) =>
+      lineNumber >= localRange.startLine && lineNumber <= localRange.endLine,
+  );
+}
+
+function getNewSeriousFindingsInLocalRange({
+  beforeFindings,
+  afterFindings,
+  localRange,
+}) {
+  const seriousBefore = beforeFindings.filter(isSeriousFinding);
+
+  const seriousAfter = afterFindings.filter(isSeriousFinding);
+
+  return seriousAfter.filter((finding) => {
+    if (!isFindingInLocalRange(finding, localRange)) {
+      return false;
+    }
+
+    return !findingExistsInCollection(finding, seriousBefore);
+  });
+}
+
+function validatePatchSemantics({
+  beforeCode,
+  candidateCode,
+  patch,
+  findings,
+}) {
+  const linkedFinding = Number.isInteger(patch.findingIndex)
+    ? findings[patch.findingIndex]
+    : null;
+
+  const beforeFindings = runPatchStaticAnalysis(beforeCode);
+
+  const afterFindings = runPatchStaticAnalysis(candidateCode);
+
+  if (!beforeFindings || !afterFindings) {
+    return {
+      valid: true,
+
+      reason:
+        "Static semantic verification was unavailable; integrity checks passed.",
+
+      linkedFinding,
+
+      targetWasStaticallyDetected: false,
+    };
+  }
+
+  const localRange = getPatchLocalRange(beforeCode, patch);
+
+  const newLocalSeriousFindings = getNewSeriousFindingsInLocalRange({
+    beforeFindings,
+
+    afterFindings,
+
+    localRange,
+  });
+
+  if (newLocalSeriousFindings.length > 0) {
+    const introducedIssues = newLocalSeriousFindings
+      .map((finding) => `"${finding.issue}"`)
+      .join(", ");
+
+    return {
+      valid: false,
+
+      reason:
+        `Patch introduces ` +
+        `${newLocalSeriousFindings.length} ` +
+        `new high/critical finding(s) inside ` +
+        `${
+          localRange.functionName
+            ? `function ${localRange.functionName}`
+            : `local lines ${localRange.startLine}-${localRange.endLine}`
+        }: ${introducedIssues}.`,
+
+      linkedFinding,
+
+      targetWasStaticallyDetected: false,
+    };
+  }
+
+  if (!linkedFinding) {
+    return {
+      valid: true,
+
+      reason:
+        `Patch introduced no new local ` +
+        `high/critical findings${
+          localRange.functionName ? ` in ${localRange.functionName}` : ""
+        }.`,
+
+      linkedFinding: null,
+
+      targetWasStaticallyDetected: false,
+    };
+  }
+
+  const targetBefore = beforeFindings.filter((finding) =>
+    findingsRepresentSameIssue(finding, linkedFinding),
+  );
+
+  if (targetBefore.length === 0) {
+    return {
+      valid: true,
+
+      reason:
+        `The linked finding is not reproduced by ` +
+        `the static analyzer. No new local ` +
+        `high/critical findings were introduced${
+          localRange.functionName ? ` in ${localRange.functionName}` : ""
+        }.`,
+
+      linkedFinding,
+
+      targetWasStaticallyDetected: false,
+    };
+  }
+
+  const targetAfter = afterFindings.filter((finding) =>
+    findingsRepresentSameIssue(finding, linkedFinding),
+  );
+
+  if (targetAfter.length >= targetBefore.length) {
+    return {
+      valid: false,
+
+      reason:
+        `Target finding still reproduces ` +
+        `after the patch ` +
+        `(${targetBefore.length} before, ` +
+        `${targetAfter.length} after).`,
+
+      linkedFinding,
+
+      targetWasStaticallyDetected: true,
+    };
+  }
+
+  return {
+    valid: true,
+
+    reason:
+      `Target static finding improved ` +
+      `(${targetBefore.length} -> ` +
+      `${targetAfter.length}). ` +
+      `No new local high/critical findings ` +
+      `introduced${
+        localRange.functionName ? ` in ${localRange.functionName}` : ""
+      }.`,
+
+    linkedFinding,
+
+    targetWasStaticallyDetected: true,
+  };
+}
+
+function applySafePatches({ originalCode, patches, language, findings }) {
   const overlapResult = removeOverlappingPatches(patches);
 
   const acceptedPatches = [];
+
   const rejectedPatches = [...overlapResult.rejected];
 
   for (const patch of overlapResult.accepted) {
@@ -822,6 +1460,7 @@ function applySafePatches({ originalCode, patches, language }) {
     if (!sizeValidation.valid) {
       rejectedPatches.push({
         ...patch,
+
         rejectionReason: sizeValidation.reason,
       });
 
@@ -832,6 +1471,8 @@ function applySafePatches({ originalCode, patches, language }) {
       continue;
     }
 
+    const beforeCode = applyPatches(originalCode, acceptedPatches);
+
     const candidateCode = applyPatchToOriginalCoordinates(
       originalCode,
       acceptedPatches,
@@ -840,14 +1481,18 @@ function applySafePatches({ originalCode, patches, language }) {
 
     const candidateValidation = validateSourceIntegrity({
       originalCode,
+
       candidateCode,
+
       language,
+
       checkGlobalSize: true,
     });
 
     if (!candidateValidation.valid) {
       rejectedPatches.push({
         ...patch,
+
         rejectionReason: candidateValidation.reason,
       });
 
@@ -858,42 +1503,48 @@ function applySafePatches({ originalCode, patches, language }) {
       continue;
     }
 
+    const semanticValidation = validatePatchSemantics({
+      beforeCode,
+
+      candidateCode,
+
+      patch,
+
+      findings,
+    });
+
+    if (!semanticValidation.valid) {
+      rejectedPatches.push({
+        ...patch,
+
+        rejectionReason: semanticValidation.reason,
+      });
+
+      console.warn(
+        `Correction patch ${patch.id} rejected semantically: ${semanticValidation.reason}`,
+      );
+
+      continue;
+    }
+
     acceptedPatches.push(patch);
 
     console.log(
-      `Correction patch ${patch.id} accepted: lines ${patch.startLine}-${patch.endLine}.`,
+      `Correction patch ${patch.id} accepted: ` +
+        `lines ${patch.startLine}-${patch.endLine}. ` +
+        `${semanticValidation.reason}`,
     );
   }
 
-  const correctedCode = applyPatchToOriginalCoordinates(originalCode, [], {
-    id: "__final-placeholder__",
-    startLine: 1,
-    endLine: 1,
-    replacementCode: normalizeNewlines(originalCode).split("\n")[0],
-    reason: "",
-  });
-
-  const finalCode =
-    acceptedPatches.length > 0
-      ? acceptedPatches
-          .sort((first, second) => second.startLine - first.startLine)
-          .reduce((currentCode, patch) => {
-            const currentLines = currentCode.split("\n");
-
-            currentLines.splice(
-              patch.startLine - 1,
-              patch.endLine - patch.startLine + 1,
-              ...patch.replacementCode.split("\n"),
-            );
-
-            return currentLines.join("\n");
-          }, normalizeNewlines(originalCode))
-      : normalizeNewlines(originalCode);
+  const finalCode = applyPatches(originalCode, acceptedPatches);
 
   const finalValidation = validateSourceIntegrity({
     originalCode,
+
     candidateCode: finalCode,
+
     language,
+
     checkGlobalSize: true,
   });
 
@@ -904,24 +1555,34 @@ function applySafePatches({ originalCode, patches, language }) {
 
     return {
       correctedCode: normalizeNewlines(originalCode),
+
       acceptedPatches: [],
+
       rejectedPatches: [
         ...rejectedPatches,
+
         ...acceptedPatches.map((patch) => ({
           ...patch,
+
           rejectionReason: `Final correction rollback: ${finalValidation.reason}`,
         })),
       ],
+
       validation: finalValidation,
+
       rolledBack: true,
     };
   }
 
   return {
     correctedCode: finalCode,
+
     acceptedPatches,
+
     rejectedPatches,
+
     validation: finalValidation,
+
     rolledBack: false,
   };
 }
@@ -936,10 +1597,15 @@ export async function runAICorrection({ code, language, findings = [] }) {
   const normalizedFindings = normalizeFindings(findings);
 
   console.log("\n========== CTHRU AUTO CORRECT ==========");
+
   console.log(`Language: ${language}`);
+
   console.log(`Original lines: ${countLines(originalCode)}`);
+
   console.log(`Original characters: ${originalCode.length}`);
+
   console.log(`Findings supplied: ${normalizedFindings.length}`);
+
   console.log("========================================\n");
 
   let workingCode = originalCode;
@@ -963,8 +1629,11 @@ export async function runAICorrection({ code, language, findings = [] }) {
 
   const deterministicValidation = validateSourceIntegrity({
     originalCode,
+
     candidateCode: workingCode,
+
     language,
+
     checkGlobalSize: true,
   });
 
@@ -974,12 +1643,15 @@ export async function runAICorrection({ code, language, findings = [] }) {
     );
 
     workingCode = originalCode;
+
     deterministicChanges.length = 0;
   }
 
   const prompt = buildCorrectionPrompt({
     code: workingCode,
+
     language,
+
     findings: normalizedFindings,
   });
 
@@ -989,6 +1661,7 @@ export async function runAICorrection({ code, language, findings = [] }) {
 
   const correctionResponse = normalizeCorrectionResponse(
     rawResponse,
+
     countLines(workingCode),
   );
 
@@ -998,16 +1671,23 @@ export async function runAICorrection({ code, language, findings = [] }) {
 
   const patchResult = applySafePatches({
     originalCode: workingCode,
+
     patches: correctionResponse.patches,
+
     language,
+
+    findings: normalizedFindings,
   });
 
   const correctedCode = patchResult.correctedCode;
 
   const finalValidation = validateSourceIntegrity({
     originalCode,
+
     candidateCode: correctedCode,
+
     language,
+
     checkGlobalSize: true,
   });
 
@@ -1018,10 +1698,14 @@ export async function runAICorrection({ code, language, findings = [] }) {
 
     return {
       correctedCode: originalCode,
+
       summary:
         "CThru rejected the generated corrections because the corrected source failed integrity validation. The original source was preserved.",
+
       changes: [],
+
       patches: [],
+
       model,
     };
   }
@@ -1036,22 +1720,34 @@ export async function runAICorrection({ code, language, findings = [] }) {
 
   const changes = [
     ...deterministicChangeMessages,
+
     ...correctionResponse.changes,
+
     ...acceptedPatchChanges,
   ]
     .filter(Boolean)
     .filter((change, index, array) => array.indexOf(change) === index);
 
   console.log("\n========== CTHRU CORRECTION RESULT ==========");
+
   console.log(`Model: ${model}`);
+
   console.log(`Original lines: ${countLines(originalCode)}`);
+
   console.log(`Corrected lines: ${countLines(correctedCode)}`);
+
   console.log(`Original characters: ${originalCode.length}`);
+
   console.log(`Corrected characters: ${correctedCode.length}`);
+
   console.log(`Deterministic changes: ${deterministicChanges.length}`);
+
   console.log(`Gemini patches proposed: ${correctionResponse.patches.length}`);
+
   console.log(`Gemini patches accepted: ${patchResult.acceptedPatches.length}`);
+
   console.log(`Gemini patches rejected: ${patchResult.rejectedPatches.length}`);
+
   console.log(
     `Symbol preservation: ${Math.round(
       finalValidation.symbolPreservation.ratio * 100,
@@ -1061,6 +1757,7 @@ export async function runAICorrection({ code, language, findings = [] }) {
   if (finalValidation.symbolPreservation.missingSymbols.length > 0) {
     console.log(
       "Missing symbols:",
+
       finalValidation.symbolPreservation.missingSymbols,
     );
   }
@@ -1077,13 +1774,17 @@ export async function runAICorrection({ code, language, findings = [] }) {
 
   return {
     correctedCode,
+
     summary:
       patchResult.acceptedPatches.length === 0 &&
       deterministicChanges.length === 0
         ? "CThru reviewed the findings but did not apply any correction that passed source-integrity validation."
         : correctionResponse.summary,
+
     changes,
+
     patches: patchResult.acceptedPatches,
+
     model,
   };
 }

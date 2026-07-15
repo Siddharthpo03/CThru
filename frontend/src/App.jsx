@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import NewReview from "./pages/NewReview";
 import Register from "./pages/Register";
 import ReviewResults from "./pages/ReviewResults";
+import ResetPassword from "./pages/ResetPassword";
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
 
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
           <Route
             path="/dashboard"
