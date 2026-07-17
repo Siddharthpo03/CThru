@@ -14,6 +14,9 @@ import NewReview from "./pages/NewReview";
 import Register from "./pages/Register";
 import ReviewResults from "./pages/ReviewResults";
 import ResetPassword from "./pages/ResetPassword";
+import AllReviews from "./pages/AllReviews";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 
 export default function App() {
   return (
@@ -59,6 +62,33 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ReviewResults />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <AllReviews />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />

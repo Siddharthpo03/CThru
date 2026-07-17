@@ -29,6 +29,10 @@ import DashboardLayout from "../components/dashboard/DashboardLayout";
 
 import { apiRequest } from "../services/api";
 
+import { exportReviewAsPDF } from "../utils/pdfExport";
+
+import CodeAnalysisEditor from "../components/editor/CodeAnalysisEditor";
+
 const severityStyles = {
   critical: "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400",
 
@@ -252,6 +256,16 @@ export default function ReviewResults() {
     }
   };
 
+  const handleDownloadPDF = () => {
+    try {
+      exportReviewAsPDF(review);
+      toast.success("PDF downloaded successfully.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to generate PDF.");
+    }
+  };
+
   const handleEditCorrectedCode = () => {
     if (!correction?.correctedCode) {
       return;
@@ -410,6 +424,14 @@ export default function ReviewResults() {
                 />
 
                 {correcting ? "Correcting..." : "Auto Correct"}
+              </button>
+
+              <button
+                onClick={handleDownloadPDF}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                <Clipboard size={17} />
+                Download PDF
               </button>
             </div>
 
@@ -650,10 +672,23 @@ export default function ReviewResults() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto p-6">
-              <pre className="overflow-auto rounded-xl border border-zinc-200 bg-zinc-950 p-5 text-sm leading-6 text-zinc-100 dark:border-zinc-800">
-                <code>{correction.correctedCode}</code>
-              </pre>
+            <div className="min-h-0 flex-1 p-6">
+              <CodeAnalysisEditor
+                initialCode={correction.correctedCode}
+                language={review.language}
+                onRetest={(updatedCode) => {
+                  setCorrectionOpen(false);
+                  navigate("/review", {
+                    state: {
+                      title: `${review.title} - Edited Corrected`,
+                      language: review.language,
+                      code: updatedCode,
+                      selectedAnalysis: review.selectedAnalysis || [],
+                      autoRun: true,
+                    },
+                  });
+                }}
+              />
             </div>
 
             <div className="flex flex-col gap-3 border-t border-zinc-200 px-6 py-5 dark:border-zinc-800 sm:flex-row sm:justify-end">
