@@ -1,0 +1,19 @@
+# Media & Large Presentation files
+*.mp4
+*.pptx
+presentation.mp4
+presentation.pptx
+
+# Node.js dependencies
+node_modules/
+
+# Environment files containing sensitive keys
+.env
+.env.*
+!.env.example
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
