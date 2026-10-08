@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { ArrowRight, LoaderCircle, Mail, User } from "lucide-react";
 
@@ -10,11 +10,16 @@ import AuthLayout from "../components/auth/AuthLayout";
 import PasswordInput from "../components/auth/PasswordInput";
 
 import { useAuth } from "../contexts/AuthContext";
+import { warmBackend } from "../services/api";
 
 export default function Register() {
   const navigate = useNavigate();
 
   const { register } = useAuth();
+
+  useEffect(() => {
+    warmBackend();
+  }, []);
 
   const [form, setForm] = useState({
     name: "",

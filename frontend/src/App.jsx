@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Toaster } from "react-hot-toast";
@@ -5,6 +6,7 @@ import { Toaster } from "react-hot-toast";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import { warmBackend } from "./services/api";
 
 import Dashboard from "./pages/Dashboard";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -19,6 +21,10 @@ import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 
 export default function App() {
+  useEffect(() => {
+    warmBackend();
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>

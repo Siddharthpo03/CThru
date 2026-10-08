@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { ArrowRight, LoaderCircle, Mail } from "lucide-react";
 
@@ -10,11 +10,16 @@ import AuthLayout from "../components/auth/AuthLayout";
 import PasswordInput from "../components/auth/PasswordInput";
 
 import { useAuth } from "../contexts/AuthContext";
+import { warmBackend } from "../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
 
   const { login } = useAuth();
+
+  useEffect(() => {
+    warmBackend();
+  }, []);
 
   const [form, setForm] = useState({
     email: "",

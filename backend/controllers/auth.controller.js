@@ -24,7 +24,7 @@ export async function register(req, res) {
     });
   }
 
-  const hashedPassword = await bcrypt.hash(password, 12);
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.create({
     data: {
@@ -126,9 +126,15 @@ export async function forgotPassword(req, res) {
     },
   });
 
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+  const resetLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${token}`;
 
-  await sendPasswordResetEmail(user.email, resetLink);
+  // Log link in server console for development / monitoring
+  console.log(`[PASSWORD RESET] Dispatching reset link to ${user.email}: ${resetLink}`);
+
+  // Dispatch email in background so SMTP latency never blocks the HTTP response
+  sendPasswordResetEmail(user.email, resetLink).catch((error) => {
+    console.error("Background reset email failed:", error);
+  });
 
   return res.status(200).json({
     success: true,
@@ -160,7 +166,7 @@ export async function resetPassword(req, res) {
     });
   }
 
-  const hashedPassword = await bcrypt.hash(password, 12);
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   await prisma.user.update({
     where: {

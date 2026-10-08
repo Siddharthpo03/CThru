@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, LoaderCircle, Mail, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import AuthLayout from "../components/auth/AuthLayout";
 import { useAuth } from "../contexts/AuthContext";
+import { warmBackend } from "../services/api";
 
 export default function ForgotPassword() {
   const { forgotPassword } = useAuth();
@@ -12,6 +13,10 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    warmBackend();
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -123,6 +128,12 @@ export default function ForgotPassword() {
               </>
             )}
           </button>
+
+          {loading && (
+            <p className="mt-3 text-center text-xs text-zinc-400 animate-pulse">
+              Contacting authentication service...
+            </p>
+          )}
         </form>
       )}
 
