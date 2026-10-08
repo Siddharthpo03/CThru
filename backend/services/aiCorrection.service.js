@@ -2,9 +2,14 @@ import { GoogleGenAI } from "@google/genai";
 
 import { runStaticAnalysis } from "./staticAnalysis.service.js";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+function getAIClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is missing from environment variables.");
+  }
+  return new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+  });
+}
 
 const CORRECTION_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest"];
 
@@ -831,6 +836,7 @@ async function generateCorrectionWithModel({ model, prompt }) {
         `Gemini correction: using ${model}, attempt ${attempt}/${MAX_ATTEMPTS_PER_MODEL}`,
       );
 
+      const ai = getAIClient();
       const response = await ai.models.generateContent({
         model,
 

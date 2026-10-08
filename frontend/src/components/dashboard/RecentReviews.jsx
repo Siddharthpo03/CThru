@@ -29,7 +29,7 @@ function ScoreBadge({ score }) {
 }
 
 // Inline Row Dropdown Menu Component
-function RowActionsDropdown({ review }) {
+function RowActionsDropdown({ review, onDeleteReview }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -43,6 +43,15 @@ function RowActionsDropdown({ review }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleDelete = async () => {
+    setIsOpen(false);
+    if (window.confirm("Are you sure you want to delete this review?")) {
+      if (onDeleteReview) {
+        await onDeleteReview(review.id || review._id);
+      }
+    }
+  };
 
   return (
     <div className="relative" ref={menuRef}>
@@ -77,12 +86,7 @@ function RowActionsDropdown({ review }) {
           <div className="my-1 border-t border-zinc-100 dark:border-zinc-900" />
 
           <button
-            onClick={() => {
-              if (confirm("Are you sure you want to delete this review?")) {
-                // Future integration hook point for structural window drop deletions
-              }
-              setIsOpen(false);
-            }}
+            onClick={handleDelete}
             className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition text-left"
           >
             <Trash2 size={15} />
@@ -94,7 +98,11 @@ function RowActionsDropdown({ review }) {
   );
 }
 
-export default function RecentReviews({ reviews = [], loading = false }) {
+export default function RecentReviews({
+  reviews = [],
+  loading = false,
+  onDeleteReview,
+}) {
   if (loading) {
     return (
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 p-6">
@@ -205,7 +213,10 @@ export default function RecentReviews({ reviews = [], loading = false }) {
 
                   {/* FIXED: Replaced default empty icon button frame shell with explicit dropdown action engine */}
                   <td className="px-6 py-4 text-right">
-                    <RowActionsDropdown review={review} />
+                    <RowActionsDropdown
+                      review={review}
+                      onDeleteReview={onDeleteReview}
+                    />
                   </td>
                 </tr>
               ))}

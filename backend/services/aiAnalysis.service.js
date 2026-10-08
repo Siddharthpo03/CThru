@@ -778,6 +778,10 @@ Return only the required structured JSON response.
 }
 
 async function generateWithModel({ model, prompt }) {
+  if (!gemini) {
+    throw new Error("GEMINI_API_KEY is missing from environment variables.");
+  }
+
   if (isModelCoolingDown(model)) {
     console.log(`Gemini AI: skipping ${model}, model is cooling down.`);
 

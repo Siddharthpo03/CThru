@@ -1,10 +1,9 @@
-import React, { useState } from "react";
-import { Code2, Play, Save, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { Code2, Play, RotateCcw } from "lucide-react";
 
 export default function CodeAnalysisEditor({
   initialCode = "",
   language = "javascript",
-  onSave,
   onRetest,
 }) {
   const [code, setCode] = useState(initialCode);

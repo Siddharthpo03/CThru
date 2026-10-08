@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import "jspdf-autotable";
 
 function formatDate(date) {
   if (!date) return "N/A";
@@ -144,7 +144,9 @@ export function exportReviewAsPDF(review) {
     try {
       const parsed = JSON.parse(rawSummary);
       rawSummary = parsed.aiSummary || parsed.summary || rawSummary;
-    } catch (e) {}
+    } catch {
+      // Ignore JSON parse errors for plain text summary
+    }
   }
 
   if (rawSummary) {
@@ -212,7 +214,7 @@ export function exportReviewAsPDF(review) {
     doc.setFillColor(243, 244, 246);
     doc.roundedRect(60, doc.currentY, trackWidth, 5, 1, 1, "F");
 
-    let barColor = colors.primary;
+    let barColor;
     if (cat.val >= 90) barColor = colors.success;
     else if (cat.val >= 70) barColor = colors.warning;
     else barColor = colors.critical;

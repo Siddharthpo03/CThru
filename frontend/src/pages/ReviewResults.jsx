@@ -9,7 +9,7 @@ import {
   Code2,
   CopyCheck,
   FileCode2,
-  Layers3,
+  Trash2,
   Pencil,
   RefreshCw,
   Shield,
@@ -266,6 +266,19 @@ export default function ReviewResults() {
     }
   };
 
+  const handleDeleteReview = async () => {
+    if (!window.confirm("Are you sure you want to delete this review?")) {
+      return;
+    }
+    try {
+      await apiRequest(`/reviews/${id}`, { method: "DELETE" });
+      toast.success("Review deleted successfully.");
+      navigate("/dashboard");
+    } catch (error) {
+      toast.error(error.message || "Failed to delete review.");
+    }
+  };
+
   const handleEditCorrectedCode = () => {
     if (!correction?.correctedCode) {
       return;
@@ -428,10 +441,19 @@ export default function ReviewResults() {
 
               <button
                 onClick={handleDownloadPDF}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <Clipboard size={17} />
                 Download PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteReview}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-100 dark:border-red-900/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+              >
+                <Trash2 size={16} />
+                Delete
               </button>
             </div>
 

@@ -1,11 +1,9 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   User,
   Mail,
-  Shield,
   Award,
   Calendar,
-  Key,
   Save,
   CheckCircle2,
 } from "lucide-react";
@@ -14,28 +12,35 @@ import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
 
-  // Local state form handling variables
-  const [name, setName] = useState(user?.name || "Siddharth Pulugujja");
-  const [email, setEmail] = useState(user?.email || "siddharth@nitw.ac.in");
+  const [name, setName] = useState(() => user?.name || "");
+  const [email, setEmail] = useState(() => user?.email || "");
   const [updating, setUpdating] = useState(false);
 
-  const handleUpdateProfile = (e) => {
+  const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    setUpdating(true);
-
-    // Simulate API request context delay
-    setTimeout(() => {
-      setUpdating(false);
+    try {
+      setUpdating(true);
+      await updateProfile({ name, email });
       toast.success("Profile updated successfully!");
-    }, 1000);
+    } catch (error) {
+      toast.error(error.message || "Failed to update profile.");
+    } finally {
+      setUpdating(false);
+    }
   };
+
+  const formattedJoinedDate = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      })
+    : "Recently";
 
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-5xl space-y-8">
-        {/* Header Block Banner */}
         <div>
           <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
             Settings
@@ -44,13 +49,11 @@ export default function Profile() {
             Account Profile
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Manage your developer identity, security keys, and system
-            preferences.
+            Manage your developer identity and account credentials.
           </p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-[1fr_280px]">
-          {/* Main Account Settings Form Box Container */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="text-lg font-semibold text-zinc-950 dark:text-white mb-6 flex items-center gap-2">
               <User size={18} className="text-indigo-500" />
@@ -107,22 +110,21 @@ export default function Profile() {
             </form>
           </div>
 
-          {/* Right Side Overview Stats Sidebar Panel */}
           <div className="space-y-6">
             <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-bold text-xl uppercase shadow-inner">
-                {name.substring(0, 2)}
+                {name ? name.substring(0, 2) : "US"}
               </div>
               <h3 className="mt-4 font-semibold text-zinc-950 dark:text-white truncate">
-                {name}
+                {name || "User"}
               </h3>
               <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
-                {email}
+                {email || "user@example.com"}
               </p>
 
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
                 <CheckCircle2 size={13} />
-                Verified Student
+                Verified User
               </div>
             </div>
 
@@ -134,14 +136,14 @@ export default function Profile() {
               <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
                 <Award size={16} className="text-amber-500" />
                 <span>
-                  Plan: <strong>Free Sandbox</strong>
+                  Plan: <strong>Developer Pro</strong>
                 </span>
               </div>
 
               <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
                 <Calendar size={16} className="text-zinc-400" />
                 <span>
-                  Joined: <strong>July 2026</strong>
+                  Joined: <strong>{formattedJoinedDate}</strong>
                 </span>
               </div>
             </div>
@@ -151,3 +153,4 @@ export default function Profile() {
     </DashboardLayout>
   );
 }
+

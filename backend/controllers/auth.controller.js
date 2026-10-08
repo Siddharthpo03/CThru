@@ -205,3 +205,119 @@ export async function getProfile(req, res) {
     user,
   });
 }
+
+export async function updateProfile(req, res) {
+  const { name, email } = req.body;
+
+  const updateData = {};
+  if (name && typeof name === "string") {
+    updateData.name = name.trim();
+  }
+
+  if (email && typeof email === "string") {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (existing && existing.id !== req.userId) {
+      return res.status(409).json({
+        success: false,
+        message: "An account with this email already exists.",
+      });
+    }
+
+    updateData.email = normalizedEmail;
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.userId },
+    data: updateData,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "Profile updated successfully.",
+    user,
+  });
+}
+
+export async function changePassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Current password and new password are required.",
+    });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must be at least 6 characters.",
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId },
+  });
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "User not found.",
+    });
+  }
+
+  const matches = await bcrypt.compare(currentPassword, user.password);
+
+  if (!matches) {
+    return res.status(401).json({
+      success: false,
+      message: "Incorrect current password.",
+    });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  await prisma.user.update({
+    where: { id: req.userId },
+    data: { password: hashedPassword },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "Password changed successfully.",
+  });
+}
+
+export async function deleteAccount(req, res) {
+  try {
+    await prisma.user.delete({
+      where: {
+        id: req.userId,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Account deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Delete account error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete account.",
+    });
+  }
+}
+
+

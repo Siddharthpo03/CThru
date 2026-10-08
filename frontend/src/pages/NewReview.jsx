@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { Braces, Code2, FileSearch, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -61,6 +61,8 @@ export default function NewReview() {
 
   const editData = location.state;
 
+  const initialTitle = editData?.title || "";
+
   const [language, setLanguage] = useState(editData?.language || "javascript");
 
   const [code, setCode] = useState(editData?.code || starterCode);
@@ -101,11 +103,11 @@ export default function NewReview() {
     setSelectedFile(null);
   };
 
-  const toggleAnalysis = (title) => {
+  const toggleAnalysis = (itemTitle) => {
     setSelectedAnalysis((current) =>
-      current.includes(title)
-        ? current.filter((item) => item !== title)
-        : [...current, title],
+      current.includes(itemTitle)
+        ? current.filter((item) => item !== itemTitle)
+        : [...current, itemTitle],
     );
   };
 
@@ -117,13 +119,15 @@ export default function NewReview() {
     try {
       setAnalyzing(true);
 
-      const title = selectedFile ? selectedFile.name : `${language} Review`;
+      const reviewTitle =
+        initialTitle.trim() ||
+        (selectedFile ? selectedFile.name : `${language} Review`);
 
       const data = await apiRequest("/reviews", {
         method: "POST",
 
         body: JSON.stringify({
-          title,
+          title: reviewTitle,
           language,
           code,
           fileName: selectedFile?.name || null,
@@ -140,6 +144,16 @@ export default function NewReview() {
       setAnalyzing(false);
     }
   };
+
+  useEffect(() => {
+    if (editData?.autoRun && editData?.code) {
+      const timer = setTimeout(() => {
+        handleAnalyze();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <DashboardLayout>

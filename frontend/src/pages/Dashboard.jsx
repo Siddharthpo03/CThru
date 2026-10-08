@@ -8,7 +8,7 @@ import {
   Search,
 } from "lucide-react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import DashboardLayout from "../components/dashboard/DashboardLayout";
@@ -26,37 +26,47 @@ export default function Dashboard() {
 
   // Search & Filter state layers
   const [reviews, setReviews] = useState([]);
-  const [filteredReviews, setFilteredReviews] = useState([]);
+  const [stats, setStats] = useState({
+    totalReviews: 0,
+    passedReviews: 0,
+    issuesFound: 0,
+    securityWarnings: 0,
+    successRate: 0,
+    reviewsThisWeek: 0,
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
   // 1. Fetch data payload at layout instantiation
   useEffect(() => {
-    const fetchReviews = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const data = await apiRequest("/reviews");
-        // Expecting data pattern: { reviews: [...] }
-        const reviewList = data.reviews || [];
-        setReviews(reviewList);
-        setFilteredReviews(reviewList);
+        const [reviewsData, statsData] = await Promise.all([
+          apiRequest("/reviews"),
+          apiRequest("/reviews/stats"),
+        ]);
+
+        setReviews(reviewsData.reviews || []);
+        if (statsData.stats) {
+          setStats(statsData.stats);
+        }
       } catch (error) {
-        toast.error("Failed to load reviews context: " + error.message);
+        toast.error("Failed to load dashboard data: " + error.message);
       } finally {
         setLoading(false);
       }
     };
-    fetchReviews();
+    fetchDashboardData();
   }, []);
 
   // 2. High-Performance Instant Filter Engine
-  useEffect(() => {
+  const filteredReviews = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
-      setFilteredReviews(reviews);
-      return;
+      return reviews;
     }
 
-    const filtered = reviews.filter((review) => {
+    return reviews.filter((review) => {
       const matchTitle = review.title?.toLowerCase().includes(query);
       const matchLanguage = review.language?.toLowerCase().includes(query);
 
@@ -70,9 +80,21 @@ export default function Dashboard() {
 
       return matchTitle || matchLanguage || matchFindings;
     });
-
-    setFilteredReviews(filtered);
   }, [searchQuery, reviews]);
+
+  const handleDeleteReview = async (id) => {
+    try {
+      await apiRequest(`/reviews/${id}`, { method: "DELETE" });
+      setReviews((prev) => prev.filter((r) => r.id !== id && r._id !== id));
+      setStats((prev) => ({
+        ...prev,
+        totalReviews: Math.max(0, prev.totalReviews - 1),
+      }));
+      toast.success("Review deleted successfully.");
+    } catch (error) {
+      toast.error(error.message || "Failed to delete review.");
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -103,29 +125,29 @@ export default function Dashboard() {
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <StatsCard
             title="Total Reviews"
-            value={String(reviews.length || 18)}
-            subtitle="Live balance track"
+            value={String(stats.totalReviews)}
+            subtitle={`${stats.reviewsThisWeek} this week`}
             icon={FileCode2}
             tone="indigo"
           />
           <StatsCard
             title="Passed Reviews"
-            value="14"
-            subtitle="78% success rate"
+            value={String(stats.passedReviews)}
+            subtitle={`${stats.successRate}% success rate`}
             icon={CheckCircle2}
             tone="green"
           />
           <StatsCard
             title="Issues Found"
-            value="37"
-            subtitle="12 resolved"
+            value={String(stats.issuesFound)}
+            subtitle="Across all reviews"
             icon={Bug}
             tone="red"
           />
           <StatsCard
             title="Security Warnings"
-            value="4"
-            subtitle="2 high priority"
+            value={String(stats.securityWarnings)}
+            subtitle="Security findings"
             icon={ShieldAlert}
             tone="amber"
           />
@@ -174,9 +196,14 @@ export default function Dashboard() {
 
         {/* RECENT REVIEWS VIEWPORT (Fed with filtered data stream) */}
         <div className="mt-6">
-          <RecentReviews reviews={filteredReviews} loading={loading} />
+          <RecentReviews
+            reviews={filteredReviews}
+            loading={loading}
+            onDeleteReview={handleDeleteReview}
+          />
         </div>
       </div>
     </DashboardLayout>
   );
 }
+

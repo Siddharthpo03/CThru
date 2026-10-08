@@ -80,6 +80,37 @@ export function AuthProvider({ children }) {
     });
   };
 
+  const updateProfile = async ({ name, email }) => {
+    const data = await apiRequest("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify({
+        name,
+        email,
+      }),
+    });
+
+    setUser(data.user);
+    return data;
+  };
+
+  const changePassword = async ({ currentPassword, newPassword }) => {
+    return await apiRequest("/auth/change-password", {
+      method: "PUT",
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+      }),
+    });
+  };
+
+  const deleteAccount = async () => {
+    const data = await apiRequest("/auth/account", {
+      method: "DELETE",
+    });
+    logout();
+    return data;
+  };
+
   const logout = () => {
     localStorage.removeItem("cthru-token");
     setUser(null);
@@ -96,6 +127,9 @@ export function AuthProvider({ children }) {
         logout,
         forgotPassword,
         resetPassword,
+        updateProfile,
+        changePassword,
+        deleteAccount,
       }}
     >
       {children}
@@ -103,6 +137,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
 
@@ -112,3 +147,4 @@ export function useAuth() {
 
   return context;
 }
+

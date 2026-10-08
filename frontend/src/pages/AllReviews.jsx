@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import RecentReviews from "../components/dashboard/RecentReviews";
 import { apiRequest } from "../services/api";
@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 
 export default function AllReviews() {
   const [reviews, setReviews] = useState([]);
-  const [filteredReviews, setFilteredReviews] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLang, setSelectedLang] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -17,7 +16,6 @@ export default function AllReviews() {
       try {
         const data = await apiRequest("/reviews");
         setReviews(data.reviews || []);
-        setFilteredReviews(data.reviews || []);
       } catch (error) {
         toast.error("Error connecting to data layer: " + error.message);
       } finally {
@@ -27,7 +25,7 @@ export default function AllReviews() {
     loadAllData();
   }, []);
 
-  useEffect(() => {
+  const filteredReviews = useMemo(() => {
     let result = reviews;
     const query = searchQuery.toLowerCase().trim();
 
@@ -43,8 +41,18 @@ export default function AllReviews() {
       result = result.filter((r) => r.language === selectedLang);
     }
 
-    setFilteredReviews(result);
+    return result;
   }, [searchQuery, selectedLang, reviews]);
+
+  const handleDeleteReview = async (id) => {
+    try {
+      await apiRequest(`/reviews/${id}`, { method: "DELETE" });
+      setReviews((prev) => prev.filter((r) => r.id !== id && r._id !== id));
+      toast.success("Review deleted successfully.");
+    } catch (error) {
+      toast.error(error.message || "Failed to delete review.");
+    }
+  };
 
   const explicitLanguages = [
     "All",
@@ -97,8 +105,13 @@ export default function AllReviews() {
         </div>
 
         {/* Reuse RecentReviews directly as our structured data renderer */}
-        <RecentReviews reviews={filteredReviews} loading={loading} />
+        <RecentReviews
+          reviews={filteredReviews}
+          loading={loading}
+          onDeleteReview={handleDeleteReview}
+        />
       </div>
     </DashboardLayout>
   );
 }
+
