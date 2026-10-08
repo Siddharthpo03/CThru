@@ -126,7 +126,8 @@ export async function forgotPassword(req, res) {
     },
   });
 
-  const resetLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${token}`;
+  const baseUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/+$/, "");
+  const resetLink = `${baseUrl}/reset-password/${token}`;
 
   // Log link in server console for development / monitoring
   console.log(`[PASSWORD RESET] Dispatching reset link to ${user.email}: ${resetLink}`);
